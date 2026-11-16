@@ -1,0 +1,258 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && isVerified() && request.auth.uid == userId;
+    }
+
+    function isCircleMember(circleId) {
+      return isSignedIn()
+        && isVerified()
+        && exists(/databases/$(database)/documents/circles/$(circleId))
+        && request.auth.uid in get(/databases/$(database)/documents/circles/$(circleId)).data.memberUids;
+    }
+
+    // Entity Validators
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'email', 'photoUrl', 'activeCircleId', 'joinedCircleIds', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'photoUrl', 'activeCircleId', 'joinedCircleIds', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.photoUrl is string && data.photoUrl.size() <= 500
+        && data.activeCircleId is string && data.activeCircleId.size() <= 64
+        && data.joinedCircleIds is list && data.joinedCircleIds.size() <= 20
+        && (data.joinedCircleIds.size() == 0 || (data.joinedCircleIds[0] is string && data.joinedCircleIds[0].size() <= 64))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLocationAlert(data) {
+      return data.keys().hasAll([
+          'userId', 'recipientEmail', 'lat', 'lng', 'mapsUrl', 'deliveryMethod', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'recipientEmail', 'lat', 'lng', 'mapsUrl', 'deliveryMethod', 'status', 'createdAt'
+        ])
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.recipientEmail is string && data.recipientEmail.size() >= 3 && data.recipientEmail.size() <= 160
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.mapsUrl is string && data.mapsUrl.size() >= 10 && data.mapsUrl.size() <= 300
+        && data.mapsUrl.matches('^https://www\\.google\\.com/maps\\?q=.*$')
+        && data.deliveryMethod in ['emailjs', 'resend', 'smtp', 'mailto_fallback', 'gmail_api']
+        && data.status in ['sent', 'failed', 'pending']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCircle(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'ownerId', 'memberUids', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'ownerId', 'memberUids', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id.size() >= 4 && data.id.size() <= 64
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 60
+        && isValidId(data.ownerId)
+        && data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 25
+        && data.memberUids[0] is string && data.memberUids[0].size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMemberLocation(data) {
+      return data.keys().hasAll([
+          'uid', 'circleId', 'displayName', 'avatarColor', 'lat', 'lng', 'accuracy', 'heading', 'speed', 'isSharing', 'mapsUrl', 'trail', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'circleId', 'displayName', 'avatarColor', 'lat', 'lng', 'accuracy', 'heading', 'speed', 'isSharing', 'mapsUrl', 'trail', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && isValidId(data.circleId) && data.circleId.size() >= 4 && data.circleId.size() <= 64
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.avatarColor is string && data.avatarColor.size() >= 4 && data.avatarColor.size() <= 16
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100000
+        && data.heading is number && data.heading >= -1 && data.heading <= 360
+        && data.speed is number && data.speed >= 0 && data.speed <= 1000
+        && data.isSharing is bool
+        && data.mapsUrl is string && data.mapsUrl.size() >= 10 && data.mapsUrl.size() <= 300
+        && data.mapsUrl.matches('^https://www\\.google\\.com/maps\\?q=.*$')
+        && data.trail is list && data.trail.size() <= 30
+        && (data.trail.size() == 0 || (
+          data.trail[0] is map
+          && data.trail[0].keys().hasAll(['lat', 'lng', 't'])
+          && data.trail[0].keys().hasOnly(['lat', 'lng', 't'])
+          && data.trail[0].lat is number
+          && data.trail[0].lng is number
+          && data.trail[0].t is number
+        ))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Private User Profile (PII Isolated)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'photoUrl', 'activeCircleId', 'joinedCircleIds', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      // Location Email Alerts Subcollection
+      match /alerts/{alertId} {
+        allow get: if isValidId(userId) && isValidId(alertId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(alertId)
+          && isOwner(userId)
+          && isValidLocationAlert(incoming())
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(alertId) && isOwner(userId);
+      }
+    }
+
+    // Friend Circles & Real-Time Member Locations
+    match /circles/{circleId} {
+      allow get: if isValidId(circleId)
+        && circleId.size() >= 4 && circleId.size() <= 64
+        && isSignedIn() && isVerified();
+      allow list: if false;
+      allow create: if isValidId(circleId)
+        && circleId.size() >= 4 && circleId.size() <= 64
+        && isSignedIn() && isVerified()
+        && isValidCircle(incoming())
+        && incoming().id == circleId
+        && incoming().ownerId == request.auth.uid
+        && incoming().memberUids.size() == 1
+        && incoming().memberUids[0] == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(circleId)
+        && circleId.size() >= 4 && circleId.size() <= 64
+        && isSignedIn() && isVerified()
+        && isValidCircle(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Join or Leave self in memberUids
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            && (
+              (
+                !(request.auth.uid in existing().memberUids)
+                && request.auth.uid in incoming().memberUids
+                && incoming().memberUids.hasAll(existing().memberUids)
+                && incoming().memberUids.size() == existing().memberUids.size() + 1
+              )
+              || (
+                request.auth.uid in existing().memberUids
+                && !(request.auth.uid in incoming().memberUids)
+                && existing().memberUids.hasAll(incoming().memberUids)
+                && incoming().memberUids.size() + 1 == existing().memberUids.size()
+              )
+            )
+          )
+          // Action: Owner renames circle
+          || (
+            existing().ownerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(circleId)
+        && isSignedIn() && isVerified()
+        && existing().ownerId == request.auth.uid;
+
+      match /members/{memberId} {
+        allow get: if isValidId(circleId)
+          && isValidId(memberId)
+          && isCircleMember(circleId);
+        allow list: if isSignedIn() && isVerified() && existing().uid == request.auth.uid;
+        allow create: if isValidId(circleId)
+          && isValidId(memberId)
+          && isSignedIn() && isVerified()
+          && memberId == request.auth.uid
+          && isValidMemberLocation(incoming())
+          && incoming().circleId == circleId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isCircleMember(circleId);
+        allow update: if isValidId(circleId)
+          && isValidId(memberId)
+          && isSignedIn() && isVerified()
+          && memberId == request.auth.uid
+          && isValidMemberLocation(incoming())
+          && incoming().uid == existing().uid
+          && incoming().circleId == existing().circleId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'avatarColor', 'lat', 'lng', 'accuracy', 'heading', 'speed', 'isSharing', 'mapsUrl', 'trail', 'updatedAt'
+          ])
+          && isCircleMember(circleId);
+        allow delete: if isValidId(circleId)
+          && isValidId(memberId)
+          && isSignedIn() && isVerified()
+          && (
+            memberId == request.auth.uid
+            || get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid
+          );
+      }
+    }
+  }
+}

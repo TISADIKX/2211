@@ -1,0 +1,218 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user profile containing authenticated account info and joined circle IDs.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "activeCircleId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "joinedCircleIds": {
+          "type": "array",
+          "description": "Bounded list of circle IDs the user belongs to (max 20)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "email", "joinedCircleIds", "createdAt", "updatedAt"]
+    },
+    "LocationAlert": {
+      "title": "LocationAlert",
+      "description": "Audit log of location permission email alerts sent to the configured recipient.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientEmail": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "mapsUrl": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 300
+        },
+        "deliveryMethod": {
+          "type": "string",
+          "enum": ["emailjs", "resend", "smtp", "mailto_fallback", "gmail_api"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["sent", "failed", "pending"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "recipientEmail", "lat", "lng", "mapsUrl", "deliveryMethod", "status", "createdAt"]
+    },
+    "FriendCircle": {
+      "title": "FriendCircle",
+      "description": "Shared friend tracking circle identified by a shareable circle code.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Bounded list of member UIDs in this circle (max 25)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "name", "ownerId", "memberUids", "createdAt", "updatedAt"]
+    },
+    "CircleMemberLocation": {
+      "title": "CircleMemberLocation",
+      "description": "Real-time non-PII GPS location and movement trail for a member within a friend circle.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "circleId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "avatarColor": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 16
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "accuracy": {
+          "type": "number"
+        },
+        "heading": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "isSharing": {
+          "type": "boolean"
+        },
+        "mapsUrl": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 300
+        },
+        "trail": {
+          "type": "array",
+          "description": "Bounded recent coordinate breadcrumbs (max 30 points)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "circleId", "displayName", "avatarColor", "lat", "lng", "isSharing", "mapsUrl", "trail", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile containing PII (email) and joined circle references."
+    },
+    "/users/{userId}/alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/LocationAlert" },
+      "description": "User's sent location alert email log."
+    },
+    "/circles/{circleId}": {
+      "schema": { "$ref": "#/entities/FriendCircle" },
+      "description": "Friend circle metadata and bounded membership list."
+    },
+    "/circles/{circleId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/CircleMemberLocation" },
+      "description": "Live GPS position and movement trail for a circle member."
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Wayfinder — Live Friend Location Tracker",
+  "description": "Real-time interactive Google Map for sharing live GPS location, tracking friends' movements, and sending Google Maps location email alerts.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
